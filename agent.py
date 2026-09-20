@@ -1,15 +1,17 @@
 from collections import deque
 import heapq
+import math
 
 
 class SearchAgent:
     """
-    Goal-Based Search Agent for Practical 03.
+    Goal-Based Search Agent for Practical 03 and Practical 04.
 
     Supports:
         - BFS (Breadth-First Search)
         - DFS (Depth-First Search)
         - UCS (Uniform-Cost Search)
+        - AStar (A* Informed Search)
 
     The agent creates an offline plan and then
     executes one action from that plan at a time.
@@ -297,6 +299,218 @@ class SearchAgent:
         return []
 
     # ==========================================================
+    # Practical 04 - Manhattan Distance
+    # ==========================================================
+
+    def manhattan_distance(self, pos, goal):
+        """
+        Calculate Manhattan Distance.
+
+        Formula:
+            h(n) = |x1 - x2| + |y1 - y2|
+
+        This is suitable for a 4-way movement grid.
+        """
+
+        x1, y1 = pos
+        x2, y2 = goal
+
+        return abs(x1 - x2) + abs(y1 - y2)
+
+    # ==========================================================
+    # Practical 04 - Euclidean Distance
+    # ==========================================================
+
+    def euclidean_distance(self, pos, goal):
+        """
+        Calculate Euclidean Distance.
+
+        Formula:
+            h(n) = sqrt((x1 - x2)^2 + (y1 - y2)^2)
+        """
+
+        x1, y1 = pos
+        x2, y2 = goal
+
+        return math.sqrt(
+            (x1 - x2) ** 2
+            + (y1 - y2) ** 2
+        )
+
+    # ==========================================================
+    # Practical 04 - A* Search
+    # ==========================================================
+
+    def astar_search(
+        self,
+        start_pos,
+        goal_pos,
+        walls,
+        grid_size,
+        heuristic_type="manhattan",
+    ):
+        """
+        A* Search.
+
+        Evaluation function:
+
+            f(n) = g(n) + h(n)
+
+        where:
+            g(n) = cost from start to current node
+            h(n) = estimated cost from current node to goal
+            f(n) = total estimated cost
+        """
+
+        priority_queue = []
+
+        reached_states = set()
+
+        counter = 0
+
+        # ------------------------------------------------------
+        # Calculate initial heuristic
+        # ------------------------------------------------------
+
+        if heuristic_type.lower() == "euclidean":
+
+            h_start = self.euclidean_distance(
+                start_pos,
+                goal_pos,
+            )
+
+        else:
+
+            h_start = self.manhattan_distance(
+                start_pos,
+                goal_pos,
+            )
+
+        # Initial path cost
+        g_start = 0
+
+        # A* evaluation
+        f_start = g_start + h_start
+
+        # ------------------------------------------------------
+        # Add starting node
+        # ------------------------------------------------------
+
+        heapq.heappush(
+            priority_queue,
+            (
+                f_start,
+                g_start,
+                counter,
+                start_pos,
+                [],
+            ),
+        )
+
+        # ------------------------------------------------------
+        # Search loop
+        # ------------------------------------------------------
+
+        while priority_queue:
+
+            (
+                f_cost,
+                g_cost,
+                _,
+                current_pos,
+                path_taken,
+            ) = heapq.heappop(
+                priority_queue
+            )
+
+            # --------------------------------------------------
+            # Goal reached
+            # --------------------------------------------------
+
+            if current_pos == goal_pos:
+                return path_taken
+
+            # --------------------------------------------------
+            # Skip already explored states
+            # --------------------------------------------------
+
+            if current_pos in reached_states:
+                continue
+
+            reached_states.add(current_pos)
+
+            # --------------------------------------------------
+            # Expand neighboring states
+            # --------------------------------------------------
+
+            for (
+                next_pos,
+                direction,
+                step_cost,
+            ) in self._get_neighbors(
+                current_pos,
+                grid_size,
+                walls,
+            ):
+
+                # Skip already reached states
+                if next_pos in reached_states:
+                    continue
+
+                # New path cost
+                new_g = g_cost + step_cost
+
+                # --------------------------------------------------
+                # Calculate heuristic
+                # --------------------------------------------------
+
+                if heuristic_type.lower() == "euclidean":
+
+                    new_h = self.euclidean_distance(
+                        next_pos,
+                        goal_pos,
+                    )
+
+                else:
+
+                    new_h = self.manhattan_distance(
+                        next_pos,
+                        goal_pos,
+                    )
+
+                # --------------------------------------------------
+                # Calculate f(n)
+                # --------------------------------------------------
+
+                new_f = new_g + new_h
+
+                # --------------------------------------------------
+                # Create new path
+                # --------------------------------------------------
+
+                new_path = path_taken + [direction]
+
+                counter += 1
+
+                # --------------------------------------------------
+                # Add node to priority queue
+                # --------------------------------------------------
+
+                heapq.heappush(
+                    priority_queue,
+                    (
+                        new_f,
+                        new_g,
+                        counter,
+                        next_pos,
+                        new_path,
+                    ),
+                )
+
+        # No solution
+        return []
+
+    # ==========================================================
     # Select Search Algorithm
     # ==========================================================
 
@@ -314,6 +528,7 @@ class SearchAgent:
         algorithm = self.active_algo.upper()
 
         if algorithm == "BFS":
+
             return self.bfs_search(
                 start,
                 goal,
@@ -322,6 +537,7 @@ class SearchAgent:
             )
 
         if algorithm == "DFS":
+
             return self.dfs_search(
                 start,
                 goal,
@@ -330,11 +546,22 @@ class SearchAgent:
             )
 
         if algorithm == "UCS":
+
             return self.ucs_search(
                 start,
                 goal,
                 grid_size,
                 walls,
+            )
+
+        if algorithm in ("ASTAR", "A*"):
+
+            return self.astar_search(
+                start_pos=start,
+                goal_pos=goal,
+                walls=walls,
+                grid_size=grid_size,
+                heuristic_type="manhattan",
             )
 
         raise ValueError(
@@ -375,7 +602,10 @@ class SearchAgent:
             if not path and food != start:
                 continue
 
-            if best_path is None or len(path) < len(best_path):
+            if (
+                best_path is None
+                or len(path) < len(best_path)
+            ):
 
                 best_food = food
                 best_path = path
@@ -429,18 +659,24 @@ class SearchAgent:
 
             # Turn right
             elif difference == 1:
+
                 actions.append("TurnRight")
+
                 facing = target_direction
 
             # Turn around
             elif difference == 2:
+
                 actions.append("TurnRight")
                 actions.append("TurnRight")
+
                 facing = target_direction
 
             # Turn left
             elif difference == 3:
+
                 actions.append("TurnLeft")
+
                 facing = target_direction
 
             # Move forward
@@ -473,8 +709,6 @@ class SearchAgent:
 
             self.plan = []
 
-            self.current_position = self.current_position
-
             return "Suck"
 
         # ------------------------------------------------------
@@ -482,6 +716,7 @@ class SearchAgent:
         # ------------------------------------------------------
 
         if "facing" in percept:
+
             self.current_facing = percept["facing"]
 
         # ------------------------------------------------------
@@ -512,7 +747,10 @@ class SearchAgent:
             if not all_food:
                 return "Suck"
 
+            # --------------------------------------------------
             # Find closest food
+            # --------------------------------------------------
+
             target_food, _ = self._find_closest_food(
                 self.current_position,
                 all_food,
@@ -524,15 +762,36 @@ class SearchAgent:
             if target_food is None:
                 return "TurnRight"
 
+            # --------------------------------------------------
             # Run selected search algorithm
-            path = self.search(
-                self.current_position,
-                target_food,
-                grid_size,
-                walls,
-            )
+            # --------------------------------------------------
 
+            if self.active_algo.upper() in (
+                "ASTAR",
+                "A*",
+            ):
+
+                path = self.astar_search(
+                    start_pos=self.current_position,
+                    goal_pos=target_food,
+                    walls=walls,
+                    grid_size=grid_size,
+                    heuristic_type="manhattan",
+                )
+
+            else:
+
+                path = self.search(
+                    self.current_position,
+                    target_food,
+                    grid_size,
+                    walls,
+                )
+
+            # --------------------------------------------------
             # Convert search path to physical actions
+            # --------------------------------------------------
+
             self.plan = self._direction_to_actions(
                 path
             )
@@ -545,7 +804,10 @@ class SearchAgent:
 
             action = self.plan.pop(0)
 
-            # Update internal model after movement
+            # --------------------------------------------------
+            # Turn Left
+            # --------------------------------------------------
+
             if action == "TurnLeft":
 
                 index = self.DIRECTIONS.index(
@@ -556,6 +818,10 @@ class SearchAgent:
                     (index - 1) % 4
                 ]
 
+            # --------------------------------------------------
+            # Turn Right
+            # --------------------------------------------------
+
             elif action == "TurnRight":
 
                 index = self.DIRECTIONS.index(
@@ -565,6 +831,10 @@ class SearchAgent:
                 self.current_facing = self.DIRECTIONS[
                     (index + 1) % 4
                 ]
+
+            # --------------------------------------------------
+            # Move Forward
+            # --------------------------------------------------
 
             elif action == "MoveForward":
 
